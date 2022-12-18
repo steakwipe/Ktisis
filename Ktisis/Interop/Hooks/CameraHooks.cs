@@ -7,6 +7,8 @@ using Dalamud.Game.ClientState.Keys;
 using Ktisis.Scene;
 using Ktisis.Events;
 using Ktisis.Structs.Input;
+using Lumina.Data.Parsing.Tex.Buffers;
+using Dalamud.Logging;
 
 namespace Ktisis.Interop.Hooks {
 	internal class CameraHooks {
@@ -21,7 +23,7 @@ namespace Ktisis.Interop.Hooks {
 		// Init & Dispose
 
 		internal static unsafe void Init() {
-			var proj = Services.SigScanner.ScanText("E8 ?? ?? ?? ?? 4C 8B 2D ?? ?? ?? ?? 41 0F 28 C2 ");
+			var proj = Services.SigScanner.ScanText("E8 ?? ?? ?? ?? 4C 8B 2D ?? ?? ?? ?? 41 0F 28 C2");
 			ProjectionHook = Hook<MakeProjectionMatrix2>.FromAddress(proj, ProjectionDetour);
 			ProjectionHook.Enable();
 
@@ -43,15 +45,15 @@ namespace Ktisis.Interop.Hooks {
 
 		// Detours
 
-		internal static IntPtr ProjectionDetour(IntPtr ptr, float a2, float a3, float a4, float a5, float a6, float a7) {
-			var exec = ProjectionHook.Original(ptr, a2, a3, a4, a5, a6, a7);
+		internal unsafe static IntPtr ProjectionDetour(IntPtr ptr, float a2, float a3, float a4, float a5, float a6, float a7) {
+			if (WorkCamera.Active) {
+				var tar = ((IntPtr)Services.Camera->Camera->CameraBase.SceneCamera.RenderCamera) + 0x50;
+				if (tar == ptr) {
+					// TODO
+				}
+			}
 
-			if (!WorkCamera.Active)
-				return exec;
-
-			// TODO
-
-			return exec;
+			return ProjectionHook.Original(ptr, a2, a3, a4, a5, a6, a7);
 		}
 
 		internal unsafe static Matrix4x4* ViewMatrixDetour(IntPtr a1) {
