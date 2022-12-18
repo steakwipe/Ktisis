@@ -7,8 +7,6 @@ using Dalamud.Game.ClientState.Keys;
 using Ktisis.Scene;
 using Ktisis.Events;
 using Ktisis.Structs.Input;
-using Lumina.Data.Parsing.Tex.Buffers;
-using Dalamud.Logging;
 
 namespace Ktisis.Interop.Hooks {
 	internal class CameraHooks {
