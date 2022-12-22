@@ -14,6 +14,7 @@ using Ktisis.Overlay;
 using Ktisis.Structs.Bones;
 using Ktisis.Structs.Input;
 using Ktisis.Interface.Components;
+using Ktisis.Scene;
 
 namespace Ktisis.Interface {
 	public static class Input {
@@ -102,6 +103,13 @@ namespace Ktisis.Interface {
 							Selection.ScrollIndex++;
 						else
 							res = false;
+						break;
+					case Purpose.CameraForward:
+					case Purpose.CameraBackward:
+					case Purpose.CameraLeft:
+					case Purpose.CameraRight:
+					case Purpose.CameraUp:
+						res = WorkCamera.Active;
 						break;
 				}
 
