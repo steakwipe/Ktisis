@@ -1,3 +1,8 @@
+# Disclaimer
+I (steakwipe) am not actively participating in development of this project, as with most projects you may find forked in my profile. I'm no programmer, and know just enough about this stuff to break things, and definitely don't know enough to fix them. Ktisis is really damn cool, and you should definitely check it out. But I'm gonna strongly encourage you to head upstream and grab it from more competent people. <3 Seriously this plugin is a game changer, go give them some pizza or something.
+
+(Begin Original Readme)
+
 # Ktisis
 [![discord](https://img.shields.io/discord/975894364020686878)](https://discord.gg/kUG3W8B8Ny)
 
