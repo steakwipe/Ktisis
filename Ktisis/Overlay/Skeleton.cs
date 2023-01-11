@@ -4,6 +4,8 @@ using System.Numerics;
 using ImGuiNET;
 using ImGuizmoNET;
 
+using Ktisis.Interface.Windows.Toolbar;
+using Ktisis.Interface.Windows.Workspace;
 using Ktisis.Structs;
 using Ktisis.Structs.Actor;
 using Ktisis.Structs.Bones;
@@ -63,7 +65,7 @@ namespace Ktisis.Overlay {
 
 			// Draw skeleton
 
-			var isUsing = ImGuizmo.IsUsing();
+			var isUsing = ImGuizmo.IsUsing() || Workspace.Transform.IsActive || TransformWindow.Transform.IsActive;
 
 			for (var p = 0; p < model->Skeleton->PartialSkeletonCount; p++) {
 				var partial = model->Skeleton->PartialSkeletons[p];
@@ -73,7 +75,7 @@ namespace Ktisis.Overlay {
 				var skeleton = pose->Skeleton;
 				for (var i = 1; i < skeleton->Bones.Length; i++) {
 					var bone = model->Skeleton->GetBone(p, i);
-					var boneName = bone.HkaBone.Name.String;
+					var boneName = bone.HkaBone.Name.String ?? "";
 					var parentId = bone.ParentId;
 
 					var uniqueName = bone.UniqueName;
