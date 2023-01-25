@@ -26,11 +26,23 @@ namespace Ktisis.Structs.Actor {
 
 		[FieldOffset(0xC40)] public ActorGaze Gaze; // Update in ActorHooks.cs as well
 
+<<<<<<< HEAD
 		[FieldOffset(0x1214)] public bool IsMotionEnabled;
 
 		public unsafe string? Name => Marshal.PtrToStringAnsi((IntPtr)GameObject.GetName());
+=======
+		public unsafe string? GetName() {
+			fixed (byte* ptr = GameObject.Name) {
+				return ptr == null ? null : Marshal.PtrToStringUTF8((IntPtr)ptr);
+			}
+		}
 
-		public string GetNameOr(string fallback) => ((ObjectKind)GameObject.ObjectKind == ObjectKind.Pc && !Ktisis.Configuration.DisplayCharName) || string.IsNullOrEmpty(Name)? fallback : Name;
+		public string GetNameOr(string fallback) {
+			var name = GetName();
+			return ((ObjectKind)GameObject.ObjectKind == ObjectKind.Pc && !Ktisis.Configuration.DisplayCharName) || string.IsNullOrEmpty(name) ? fallback : name;
+		}
+>>>>>>> origin/brutal_chex
+
 		public string GetNameOrId() => GetNameOr("Actor #" + ObjectID);
 
 		public unsafe IntPtr GetAddress() {
