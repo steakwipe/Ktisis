@@ -1,8 +1,3 @@
-# Disclaimer
-I (steakwipe) am not actively participating in development of this project, as with most projects you may find forked in my profile. I'm no programmer, and know just enough about this stuff to break things, and definitely don't know enough to fix them. Ktisis is really damn cool, and you should definitely check it out. But I'm gonna strongly encourage you to head upstream and grab it from more competent people. <3 Seriously this plugin is a game changer, go give them some pizza or something.
-
-(Begin Original Readme)
-
 # Ktisis
 [![discord](https://img.shields.io/discord/975894364020686878)](https://discord.gg/kUG3W8B8Ny)
 
@@ -34,6 +29,21 @@ This will enable you to install community-created plugins.
 
 #### Repo URL
 `https://raw.githubusercontent.com/ktisis-tools/Ktisis/main/repo.json`
+
+## Contributing
+
+Contributions are generally welcome, as long as they adhere to the following principles:
+- Manipulation of any ingame object must be confined within GPose.
+- It must not automate any tasks that result in network packets being sent to the server.
+- Any changes to the client state must not be:
+  - a) Permanent or irreversible by the user.
+  - b) Detectable by the server, directly or indirectly.
+
+Ktisis makes heavy use of unsafe code. If you are inexperienced or unfamiliar with the risks of this, then refrain from making code contributions that depend on it. Pull requests that show a reckless disregard for memory safety may be closed without further review.
+
+Pull requests containing new features must be reviewed by an organization member or repo maintainer before being merged - PRs heavily containing unsafe code must be reviewed by both core developers ([@chirpxiv](https://github.com/chirpxiv), [@Fayti1703](https://github.com/Fayti1703)).
+
+As Ktisis is currently in a 'soft' feature lock with v0.3's codebase overhaul underway, PRs can take some time before they get merged or put in an official release; most will likely be put into individual branches to be merged with v0.3.
 
 ## Acknowledgements
 

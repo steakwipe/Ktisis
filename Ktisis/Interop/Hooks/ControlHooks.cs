@@ -5,10 +5,11 @@ using Dalamud.Game.ClientState.Keys;
 
 using Ktisis.Events;
 using Ktisis.Structs.Input;
-using Dalamud.Logging;
 
 namespace Ktisis.Interop.Hooks {
 	internal static class ControlHooks {
+		public static KeyboardState KeyboardState = new();
+
 		internal unsafe delegate void InputDelegate(InputEvent* input, IntPtr a2, ControllerState* controllerState, MouseState* mouseState, KeyboardState* keyState);
 		internal static Hook<InputDelegate> InputHook = null!;
 
@@ -18,8 +19,8 @@ namespace Ktisis.Interop.Hooks {
 			if (!Ktisis.IsInGPose) return;
 
 			try {
-				if (mouseState != null && EventManager.OnMouseEvent != null) {
-					EventManager.OnMouseEvent(mouseState);
+				if (mouseState != null) {
+					// TODO
 				}
 
 				// Process queue
@@ -29,7 +30,7 @@ namespace Ktisis.Interop.Hooks {
 
 				var keys = input->Keyboard->GetQueue();
 				if (keys == null) return;
-				//EventManager.KeyboardState = *keys;
+				KeyboardState = *keys;
 
 				var queueCount = Math.Min(keyState->KeyboardQueueCount, 64);
 				for (var i = 0; i < queueCount; i++) {
@@ -65,14 +66,9 @@ namespace Ktisis.Interop.Hooks {
 		internal static IntPtr InputDetour2(ulong a1, uint a2, ulong a3, uint a4) {
 			var exec = InputHook2.Original(a1, a2, a3, a4);
 
-			if (Ktisis.IsInGPose) {
-				if (a2 == 257) { // Released
-					if (EventManager.OnKeyReleased != null)
-						EventManager.OnKeyReleased((VirtualKey)a3);
-					EventManager.HeldKeys[a3] = false;
-				} else if (a2 == 256) { // Held
-					EventManager.HeldKeys[a3] = true;
-				}
+			if (Ktisis.IsInGPose && a2 == 257) { // Released
+				if (EventManager.OnKeyReleased != null)
+					EventManager.OnKeyReleased((VirtualKey)a3);
 			}
 
 			return exec;

@@ -1,9 +1,11 @@
-﻿using System.Linq;
+﻿using System;
+using System.Linq;
 using System.Collections.Generic;
 
 using Dalamud.Game.ClientState.Keys;
 
 using Ktisis.Events;
+using Ktisis.Overlay;
 using Ktisis.Structs.Input;
 using Ktisis.Interop.Hooks;
 using Ktisis.Structs.Actor.State;
@@ -38,7 +40,7 @@ namespace Ktisis.History {
 		// Events
 
 		public static bool OnInput(QueueItem input) {
-			if (EventManager.IsKeyDown(VirtualKey.CONTROL)) {
+			if (ControlHooks.KeyboardState.IsKeyDown(VirtualKey.CONTROL)) {
 				if (input.VirtualKey == VirtualKey.Z) {
 					Undo();
 					return true;
@@ -82,6 +84,12 @@ namespace Ktisis.History {
 			if (!PoseHooks.PosingEnabled && !PoseHooks.AnamPosingEnabled) return;
 			if (History == null) return;
 
+			if (!Skeleton.BoneSelect.Active) {
+				// Because history bugs out when transforming actors.
+				// Just return here because this is getting rewritten anyway.
+				return;
+			}
+
 			if (isEditing && !_currentState) {
 				if (_maxIdx != _currentIdx) createNewTimeline();
 				UpdateHistory(HistoryItemType.ActorBone);
@@ -101,7 +109,7 @@ namespace Ktisis.History {
 				var entryToAdd = HistoryItemFactory.Create(HistoryItemType.ActorBone);
 				if (entryToAdd != null)
 					AddEntryToHistory(entryToAdd);
-			} catch (System.ArgumentException e) {
+			} catch (ArgumentException e) {
 				Logger.Fatal(e.Message);
 				return;
 			}
