@@ -20,10 +20,8 @@ namespace Ktisis.Interop.Hooks {
 					var target = Ktisis.GPoseTarget;
 					if (target != null) {
 						var actor = (Actor*)Ktisis.GPoseTarget!.Address;
-						if (actor != null) {
-							var name = actor->GetName();
-							if (name != null) nameToDisplay = name;
-						}
+						if (actor != null && actor->Model != null && actor->Name != null)
+							nameToDisplay = actor->Name!;
 					}
 				}
 

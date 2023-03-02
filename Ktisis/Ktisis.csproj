@@ -3,7 +3,7 @@
   <PropertyGroup>
     <Authors>Chirp</Authors>
     <Company>Ktisis Tools</Company>
-    <Version>0.2.4.2</Version>
+    <Version>0.2.4.0</Version>
     <Description>An internal posing tool.</Description>
     <Copyright></Copyright>
     <PackageProjectUrl>https://github.com/ktisis-tools/Ktisis</PackageProjectUrl>
@@ -23,10 +23,6 @@
 
   <PropertyGroup>
     <DalamudLibPath>$(appdata)\XIVLauncher\addon\Hooks\dev\</DalamudLibPath>
-  </PropertyGroup>
-  <PropertyGroup Condition="'$(OS)' != 'Windows_NT' OR '$(CI)' == 'true'">
-    <DalamudLibPath>$(DALAMUD_HOME)/</DalamudLibPath>
-    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
   </PropertyGroup>
 
   <PropertyGroup Condition="$(Configuration) == 'External'">

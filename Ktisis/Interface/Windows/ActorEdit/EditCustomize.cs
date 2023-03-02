@@ -470,7 +470,7 @@ namespace Ktisis.Interface.Windows {
 						iconId = (uint)CharaMakeType.FacialFeatures[8 * i];
 
 					var icon = Services.DataManager.GetImGuiTextureIcon(iconId);
-					if (icon != null) features.Add(icon);
+					features.Add(icon!);
 				}
 				FacialFeatureIcons = features;
 				FaceType = custom.FaceType;
@@ -546,8 +546,6 @@ namespace Ktisis.Interface.Windows {
 
 					int i = 0;
 					foreach (var (val, icon) in option.Select!) {
-						if (icon == null) continue;
-
 						if (ImGui.ImageButton(icon.ImGuiHandle, ListIconSize)) {
 							custom.Bytes[(uint)opt.Index] = (byte)val;
 							Apply(custom);
@@ -661,12 +659,12 @@ namespace Ktisis.Interface.Windows {
 								if (feat == null || feat.FeatureId == 0) break;
 
 								var icon = Services.DataManager.GetImGuiTextureIcon(feat.Icon);
-								if (icon != null) icons.Add(feat.FeatureId, icon);
+								icons.Add(feat.FeatureId, icon!);
 							}
 						} else {
 							for (var x = 0; x < val.Count; x++) {
 								var icon = Services.DataManager.GetImGuiTextureIcon(val.Params[x]);
-								if (icon != null) icons.Add(val.Graphics[x], icon);
+								icons.Add(val.Graphics[x], icon!);
 							}
 						}
 						opt.Select = icons;
