@@ -10,6 +10,7 @@ using FFXIVClientStructs.FFXIV.Client.Graphics.Render;
 using Ktisis.Structs;
 using Ktisis.Structs.Actor;
 using Ktisis.Structs.Poses;
+using Dalamud.Logging;
 
 namespace Ktisis.Interop.Hooks {
 	public static class PoseHooks {
