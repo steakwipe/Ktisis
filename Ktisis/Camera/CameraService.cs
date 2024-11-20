@@ -4,7 +4,6 @@ using System.Numerics;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 
-using Dalamud.Logging;
 using Dalamud.Game.ClientState.Objects.Types;
 
 using FFXIVClientStructs.FFXIV.Client.Graphics.Scene;
@@ -29,7 +28,7 @@ namespace Ktisis.Camera {
 
 			var camera = GetCameraByAddress((nint)active);
 			if (camera == null && Override != null) {
-				PluginLog.Warning("Lost track of active camera! Attempting to reset.");
+				Ktisis.Log.Warning("Lost track of active camera! Attempting to reset.");
 				Reset();
 				camera = GetCameraByAddress((nint)Services.Camera->Camera);
 			}
@@ -83,7 +82,7 @@ namespace Ktisis.Camera {
 			return pos;
 		}
 		
-		internal static GameObject? GetTargetLock(nint addr) {
+		internal static IGameObject? GetTargetLock(nint addr) {
 			if (!Ktisis.IsInGPose || GetCameraByAddress(addr) is not KtisisCamera camera)
 				return null;
 
@@ -133,6 +132,7 @@ namespace Ktisis.Camera {
 		// CameraManager wrappers
 
 		internal unsafe static void Reset() {
+			Ktisis.Log.Debug("Resetting camera");
 			CheckFreecam();
 			Override = null;
 			SetCamera(Services.Camera->Camera);
@@ -141,12 +141,14 @@ namespace Ktisis.Camera {
 		private unsafe static void SetCamera(GameCamera* camera) {
 			if (camera == null) return;
 			var mgr = CameraManager.Instance();
-			mgr->CameraArraySpan[0] = &camera->CameraBase.SceneCamera;
+			mgr->Cameras[0] = &camera->CameraBase.SceneCamera;
 		}
 		
 		// Overrides
 		
 		internal unsafe static void SetOverride(KtisisCamera camera) {
+			Ktisis.Log.Debug($"Setting camera to {camera.Name}");
+			
 			CheckFreecam(camera);
 			
 			if (camera.IsNative || !camera.IsValid()) {
@@ -163,6 +165,21 @@ namespace Ktisis.Camera {
 		internal static void Init() {
 			CameraHooks.Init();
 			EventManager.OnGPoseChange += OnGPoseChange;
+		}
+		
+		internal static void ChangeCameraIndex(int offset) {
+			var camera = GetActiveCamera();
+			if (camera == null) 
+				return;
+				
+			if (GetFreecam() == camera)
+				return;
+
+			var newIndex = (Cameras.FindIndex(tofind => tofind == camera) + offset) % Cameras.Count;
+			if (newIndex < 0) // loop back to start.
+				newIndex = Cameras.Count - 1; 
+				
+			SetOverride(Cameras[newIndex]);
 		}
 
 		internal static void Dispose() {
@@ -182,6 +199,9 @@ namespace Ktisis.Camera {
 				var active = (GPoseCamera*)Services.Camera->GetActiveCamera();
 				if (active != null) {
 					active->DistanceMax = 20;
+					active->DistanceMin = 1.5f;
+					active->YMax = -1.5f;
+					active->YMin = 1.5f;
 					active->Distance = Math.Clamp(active->Distance, 0, 20);
 				}
 			}
@@ -199,7 +219,7 @@ namespace Ktisis.Camera {
 		}
 
 		private unsafe static void DisposeCameras() {
-			PluginLog.Debug("Disposing cameras...");
+			Ktisis.Log.Debug("Disposing cameras...");
 			if (Override != null)
 				Reset();
 			foreach (var cam in Cameras)

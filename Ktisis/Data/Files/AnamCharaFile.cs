@@ -3,6 +3,7 @@ using System.Numerics;
 
 using Dalamud.Game.ClientState.Objects.Enums;
 
+using Ktisis.Data.Excel;
 using Ktisis.Structs.Actor;
 using Ktisis.Data.Serialization.Converters;
 
@@ -85,6 +86,8 @@ namespace Ktisis.Data.Files {
 		public ItemSave? Wrists { get; set; }
 		public ItemSave? LeftRing { get; set; }
 		public ItemSave? RightRing { get; set; }
+		
+		public ushort? Glasses { get; set; }
 
 		// extended appearance
 		// NOTE: extended weapon values are stored in the WeaponSave
@@ -108,64 +111,67 @@ namespace Ktisis.Data.Files {
 			ObjectKind = (ObjectKind)actor.GameObject.ObjectKind;
 
 			SaveMode = mode;
+			
+			var custom = actor.GetCustomize();
 
 			if (IncludeSection(SaveModes.EquipmentWeapons, mode)) {
-				MainHand = new WeaponSave(actor.DrawData.MainHand.Equip);
+				MainHand = new WeaponSave(actor.GetWeaponEquip(EquipSlot.MainHand));
 				////MainHand.Color = actor.GetValue(Offsets.Main.MainHandColor);
 				////MainHand.Scale = actor.GetValue(Offsets.Main.MainHandScale);
 
-				OffHand = new WeaponSave(actor.DrawData.OffHand.Equip);
+				OffHand = new WeaponSave(actor.GetWeaponEquip(EquipSlot.OffHand));
 				////OffHand.Color = actor.GetValue(Offsets.Main.OffhandColor);
 				////OffHand.Scale = actor.GetValue(Offsets.Main.OffhandScale);
 			}
 
 			if (IncludeSection(SaveModes.EquipmentGear, mode)) {
-				HeadGear = new ItemSave(actor.DrawData.Equipment.Head);
-				Body = new ItemSave(actor.DrawData.Equipment.Chest);
-				Hands = new ItemSave(actor.DrawData.Equipment.Hands);
-				Legs = new ItemSave(actor.DrawData.Equipment.Legs);
-				Feet = new ItemSave(actor.DrawData.Equipment.Feet);
+				HeadGear = GetItemSave(actor, EquipIndex.Head);
+				Body = GetItemSave(actor, EquipIndex.Chest);
+				Hands = GetItemSave(actor, EquipIndex.Hands);
+				Legs = GetItemSave(actor, EquipIndex.Legs);
+				Feet = GetItemSave(actor, EquipIndex.Feet);
+				Glasses = actor.DrawData.Glasses;
 			}
 
 			if (IncludeSection(SaveModes.EquipmentAccessories, mode)) {
-				Ears = new ItemSave(actor.DrawData.Equipment.Earring);
-				Neck = new ItemSave(actor.DrawData.Equipment.Necklace);
-				Wrists = new ItemSave(actor.DrawData.Equipment.Bracelet);
-				LeftRing = new ItemSave(actor.DrawData.Equipment.RingLeft);
-				RightRing = new ItemSave(actor.DrawData.Equipment.RingRight);
+				Ears = GetItemSave(actor, EquipIndex.Earring);
+				Neck = GetItemSave(actor, EquipIndex.Necklace);
+				Wrists = GetItemSave(actor, EquipIndex.Bracelet);
+				LeftRing = GetItemSave(actor, EquipIndex.RingLeft);
+				RightRing = GetItemSave(actor, EquipIndex.RingRight);
 			}
 
 			if (IncludeSection(SaveModes.AppearanceHair, mode)) {
-				Hair = actor.DrawData.Customize.HairStyle;
-				EnableHighlights = (actor.DrawData.Customize.HasHighlights & 0x80) != 0;
-				HairTone = actor.DrawData.Customize.HairColor;
-				Highlights = actor.DrawData.Customize.HairColor2;
+				Hair = custom.HairStyle;
+				EnableHighlights = (custom.HasHighlights & 0x80) != 0;
+				HairTone = custom.HairColor;
+				Highlights = custom.HairColor2;
 				/*HairColor = actor.ModelObject?.ExtendedAppearance?.HairColor;
 				HairGloss = actor.ModelObject?.ExtendedAppearance?.HairGloss;
 				HairHighlight = actor.ModelObject?.ExtendedAppearance?.HairHighlight;*/
 			}
 
 			if (IncludeSection(SaveModes.AppearanceFace, mode) || IncludeSection(SaveModes.AppearanceBody, mode)) {
-				Race = (AnamRace)actor.DrawData.Customize.Race;
-				Gender = actor.DrawData.Customize.Gender;
-				Tribe = (AnamTribe)actor.DrawData.Customize.Tribe;
-				Age = actor.DrawData.Customize.Age;
+				Race = (AnamRace)custom.Race;
+				Gender = custom.Gender;
+				Tribe = (AnamTribe)custom.Tribe;
+				Age = custom.Age;
 			}
 
 			if (IncludeSection(SaveModes.AppearanceFace, mode)) {
-				Head = actor.DrawData.Customize.FaceType;
-				REyeColor = actor.DrawData.Customize.EyeColor;
-				LimbalEyes = actor.DrawData.Customize.FaceFeaturesColor;
-				FacialFeatures = (AnamFacialFeature)actor.DrawData.Customize.FaceFeatures;
-				Eyebrows = actor.DrawData.Customize.Eyebrows;
-				LEyeColor = actor.DrawData.Customize.EyeColor2;
-				Eyes = actor.DrawData.Customize.EyeShape;
-				Nose = actor.DrawData.Customize.NoseShape;
-				Jaw = actor.DrawData.Customize.JawShape;
-				Mouth = actor.DrawData.Customize.LipStyle;
-				LipsToneFurPattern = actor.DrawData.Customize.LipColor;
-				FacePaint = (byte)actor.DrawData.Customize.Facepaint;
-				FacePaintColor = actor.DrawData.Customize.FacepaintColor;
+				Head = custom.FaceType;
+				REyeColor = custom.EyeColor;
+				LimbalEyes = custom.FaceFeaturesColor;
+				FacialFeatures = (AnamFacialFeature)custom.FaceFeatures;
+				Eyebrows = custom.Eyebrows;
+				LEyeColor = custom.EyeColor2;
+				Eyes = custom.EyeShape;
+				Nose = custom.NoseShape;
+				Jaw = custom.JawShape;
+				Mouth = custom.LipStyle;
+				LipsToneFurPattern = custom.LipColor;
+				FacePaint = (byte)custom.Facepaint;
+				FacePaintColor = custom.FacepaintColor;
 				/*LeftEyeColor = actor.ModelObject?.ExtendedAppearance?.LeftEyeColor;
 				RightEyeColor = actor.ModelObject?.ExtendedAppearance?.RightEyeColor;
 				LimbalRingColor = actor.ModelObject?.ExtendedAppearance?.LimbalRingColor;
@@ -173,21 +179,24 @@ namespace Ktisis.Data.Files {
 			}
 
 			if (IncludeSection(SaveModes.AppearanceBody, mode)) {
-				Height = actor.DrawData.Customize.Height;
-				Skintone = actor.DrawData.Customize.SkinColor;
-				EarMuscleTailSize = actor.DrawData.Customize.RaceFeatureSize;
-				TailEarsType = actor.DrawData.Customize.RaceFeatureType;
-				Bust = actor.DrawData.Customize.BustSize;
+				Height = custom.Height;
+				Skintone = custom.SkinColor;
+				EarMuscleTailSize = custom.RaceFeatureSize;
+				TailEarsType = custom.RaceFeatureType;
+				Bust = custom.BustSize;
 
-				unsafe { HeightMultiplier = actor.Model->Height; }
+				unsafe { HeightMultiplier = actor.Model != null ? actor.Model->Height : 1; }
 
 				/*SkinColor = actor.ModelObject?.ExtendedAppearance?.SkinColor;
 				SkinGloss = actor.ModelObject?.ExtendedAppearance?.SkinGloss;
 				MuscleTone = actor.ModelObject?.ExtendedAppearance?.MuscleTone;
-				BustScale = actor.ModelObject?.Bust?.Scale;
-				Transparency = actor.Transparency;*/
+				BustScale = actor.ModelObject?.Bust?.Scale;*/
+				Transparency = actor.Transparency;
 			}
 		}
+
+		private ItemSave GetItemSave(Actor actor, EquipIndex slot)
+			=> new ItemSave(actor.GetEquip(slot));
 
 		public unsafe void Apply(Actor* actor, SaveModes mode) {
 			if (Tribe != null && !Enum.IsDefined((Tribe)Tribe))
@@ -209,6 +218,7 @@ namespace Ktisis.Data.Files {
 				Hands?.Write(actor, EquipIndex.Hands);
 				Legs?.Write(actor, EquipIndex.Legs);
 				Feet?.Write(actor, EquipIndex.Feet);
+				if (Glasses != null) actor->SetGlasses(Glasses.Value);
 			}
 
 			if (IncludeSection(SaveModes.EquipmentAccessories, mode)) {
@@ -219,7 +229,7 @@ namespace Ktisis.Data.Files {
 				LeftRing?.Write(actor, EquipIndex.RingLeft);
 			}
 
-			var custom = actor->DrawData.Customize;
+			var custom = actor->GetCustomize();
 
 			if (IncludeSection(SaveModes.AppearanceHair, mode)) {
 				if (Hair != null)
@@ -305,6 +315,8 @@ namespace Ktisis.Data.Files {
 
 				if (Bust != null)
 					custom.BustSize = (byte)Bust;
+				
+				actor->Transparency = Transparency ?? 1.0f;
 			}
 
 			actor->ApplyCustomize(custom);
@@ -353,6 +365,7 @@ namespace Ktisis.Data.Files {
 				ModelBase = from.Base;
 				ModelVariant = from.Variant;
 				DyeId = from.Dye;
+				DyeId2 = from.Dye2;
 			}
 
 			public Vector3 Color { get; set; }
@@ -361,6 +374,7 @@ namespace Ktisis.Data.Files {
 			public ushort ModelBase { get; set; }
 			public ushort ModelVariant { get; set; }
 			public byte DyeId { get; set; }
+			public byte DyeId2 { get; set; }
 
 			public unsafe void Write(Actor* actor, bool isMainHand) {
 				var wep = new WeaponEquip() {
@@ -371,6 +385,7 @@ namespace Ktisis.Data.Files {
 					wep.Base = ModelBase;
 					wep.Variant = ModelVariant;
 					wep.Dye = DyeId;
+					wep.Dye2 = DyeId2;
 				}
 
 				actor->Equip(isMainHand ? 0 : 1, wep);
@@ -386,17 +401,20 @@ namespace Ktisis.Data.Files {
 				ModelBase = from.Id;
 				ModelVariant = from.Variant;
 				DyeId = from.Dye;
+				DyeId2 = from.Dye2;
 			}
 
 			public ushort ModelBase { get; set; }
 			public byte ModelVariant { get; set; }
 			public byte DyeId { get; set; }
+			public byte DyeId2 { get; set; }
 
 			public unsafe void Write(Actor* actor, EquipIndex index) {
 				var item = new ItemEquip() {
 					Id = ModelBase,
 					Variant = ModelVariant,
-					Dye = DyeId
+					Dye = DyeId,
+					Dye2 = DyeId2
 				};
 				actor->Equip(index, item);
 			}

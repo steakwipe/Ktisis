@@ -2,9 +2,11 @@ using System.Numerics;
 using System.Runtime.InteropServices;
 using System.Collections.Generic;
 
-using FFXIVClientStructs.Havok;
-using FFXIVClientStructs.FFXIV.Client.Graphics.Scene;
 using FFXIVClientStructs.FFXIV.Client.Graphics.Render;
+using FFXIVClientStructs.FFXIV.Client.Graphics.Scene;
+using FFXIVClientStructs.Havok.Common.Base.Math.QsTransform;
+
+using ModelType = FFXIVClientStructs.FFXIV.Client.Graphics.Scene.CharacterBase.ModelType;
 
 namespace Ktisis.Structs.Actor {
 	[StructLayout(LayoutKind.Explicit)]
@@ -24,9 +26,35 @@ namespace Ktisis.Structs.Actor {
 		
 		[FieldOffset(0x148)] public unsafe Breasts* Bust;
 		
-		[FieldOffset(0x274)] public float Height;
+		[FieldOffset(0x2A4)] public float Height;
 
 		[FieldOffset(0x370)] public nint Sklb;
+
+		[FieldOffset(0xA10)] public Customize Customize;
+
+		[FieldOffset(0xA18)] public unsafe fixed ulong DemiEquip[5];
+		[FieldOffset(0xA30)] public unsafe fixed ulong HumanEquip[11];
+		
+		[FieldOffset(0x2E0)] public float WeatherWetness;  // Set to 1.0f when raining and not covered or umbrella'd
+		[FieldOffset(0x2E4)] public float SwimmingWetness; // Set to 1.0f when in water
+		[FieldOffset(0x2E8)] public float WetnessDepth;    // Set to ~character height in GPose and higher values when swimming or diving.
+
+		private unsafe CharacterBase* AsCharacter() {
+			fixed (ActorModel* self = &this)
+				return (CharacterBase*)self;
+		}
+
+		public unsafe bool IsHuman()
+			=> AsCharacter()->GetModelType() == ModelType.Human;
+
+		public unsafe Customize? GetCustomize()
+			=> IsHuman() ? this.Customize : null;
+
+		public unsafe ItemEquip GetEquipSlot(int slot) => AsCharacter()->GetModelType() switch {
+			ModelType.Human => (ItemEquip)this.HumanEquip[slot],
+			ModelType.DemiHuman => slot < 5 ? (ItemEquip)this.DemiEquip[slot] : default,
+			_ => default
+		};
 
 		public unsafe void SyncModelSpace(bool refPose = false) {
 			if (Skeleton == null) return;

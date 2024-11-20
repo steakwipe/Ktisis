@@ -6,10 +6,9 @@ using System.Threading;
 using System.Threading.Tasks;
 
 using ImGuiNET;
-using ImGuiScene;
 
 using Dalamud.Interface;
-using Dalamud.Logging;
+using Dalamud.Interface.Textures;
 
 using Ktisis.Util;
 using Ktisis.Data;
@@ -18,6 +17,9 @@ using Ktisis.Helpers.Async;
 using Ktisis.Structs.Actor;
 using Ktisis.Structs.Actor.Equip;
 using Ktisis.Interface.Components;
+using Ktisis.Structs.Actor.Types;
+
+using Lumina.Excel;
 
 namespace Ktisis.Interface.Windows.ActorEdit {
 	public static class EditEquip {
@@ -31,22 +33,27 @@ namespace Ktisis.Interface.Windows.ActorEdit {
 
 		public static IEnumerable<Item>? Items => ItemData.Get();
 
+		public static ExcelSheet<Glasses>? Glasses;
+
 		public static Dictionary<EquipSlot, ItemCache> Equipped = new();
 
 		public static EquipSlot? SlotSelect;
 		public static IEnumerable<Item>? SlotItems;
+		private static string GlassesSearch = "";
 		private static string ItemSearch = "";
 		private static string SetSearch = "";
 		private static string DyeSearch = "";
 		private static bool DrawSetSelection = false;
 		private static bool DrawSetDyeSelection = false;
+		private static bool DrawGlassesSelection = false;
 
 		private static EquipSlot? SlotSelectDye;
+		private static int SelectDyeIndex;
 		
 		public static IEnumerable<Dye>? Dyes => DyeData.Get();
 
 		public static Item? FindItem(object item, EquipSlot slot)
-			=> Items?.FirstOrDefault(i => (item is WeaponEquip ? i.IsWeapon() : i.IsEquippable(slot)) && i.IsEquipItem(item), null!);
+			=> Items?.FirstOrDefault(i => (item is WeaponEquip ? i.IsWeapon() : i.IsEquippable(slot)) && i.IsEquipItem(item));
 
 		public static EquipIndex SlotToIndex(EquipSlot slot) => (EquipIndex)(slot - ((int)slot >= 5 ? 3 : 2));
 
@@ -54,13 +61,14 @@ namespace Ktisis.Interface.Windows.ActorEdit {
 
 		private readonly static AsyncData<IEnumerable<Item>> ItemData = new(GetItemData);
 		private static IEnumerable<Item> GetItemData(object[] args)
-			=> Sheets.GetSheet<Item>().Where(i => i.IsEquippable());
+			=> Sheets.GetSheet<Item>().Where(i => i.IsEquippable()).ToList();
 
 		private readonly static AsyncData<IEnumerable<Dye>> DyeData = new(GetDyeData);
 		private static IEnumerable<Dye> GetDyeData(object[] args)
 			=> Sheets.GetSheet<Dye>()
 				.Where(i => i.IsValid())
-				.OrderBy(i => i.Shade).ThenBy(i => i.SubOrder);
+				.OrderBy(i => i.Shade).ThenBy(i => i.SubOrder)
+				.ToList();
 		
 		// UI Code
 
@@ -68,6 +76,11 @@ namespace Ktisis.Interface.Windows.ActorEdit {
 			if (Items == null || Dyes == null) return;
 			
 			DrawControls();
+			
+			ImGui.Spacing();
+			DrawFaceWear();
+			ImGui.Spacing();
+			ImGui.Spacing();
 
 			ImGui.BeginGroup();
 			for (var i = 2; i < 13; i++) {
@@ -83,19 +96,35 @@ namespace Ktisis.Interface.Windows.ActorEdit {
 				DrawSelector(slot);
 			}
 			ImGui.EndGroup();
-
+			
 			ImGui.EndTabItem();
+		}
+
+		public unsafe static void DrawFaceWear() {
+			Glasses ??= Services.DataManager.GetExcelSheet<Glasses>()!;
+			
+			var glassesId = EditActor.Target->DrawData.Glasses;
+			var glasses = Glasses.GetRow(glassesId);
+			var name = glasses.Name;
+			if (ImGui.BeginCombo("Glasses", name)) {
+				DrawGlassesSelection = true;
+				ImGui.CloseCurrentPopup();
+				ImGui.EndCombo();
+			}
+
+			if (DrawGlassesSelection)
+				DrawGlassesSelector();
 		}
 
 		public unsafe static void DrawSelector(EquipSlot slot) {
 			var tar = EditActor.Target;
 			var isWeapon = slot == EquipSlot.MainHand || slot == EquipSlot.OffHand;
-
+			
 			object equipObj;
 			if (isWeapon)
-				equipObj = slot == EquipSlot.MainHand ? tar->DrawData.MainHand.Equip : tar->DrawData.OffHand.Equip;
+				equipObj = tar->GetWeaponEquip(slot);
 			else
-				equipObj = (ItemEquip)tar->DrawData.Equipment.Slots[(int)SlotToIndex(slot)];
+				equipObj = tar->GetEquip(SlotToIndex(slot));
 
 			var isEmpty = true;
 			{
@@ -111,7 +140,7 @@ namespace Ktisis.Interface.Windows.ActorEdit {
 				Equipped[slot].SetEquip(equipObj, slot);
 
 			var item = Equipped[slot];
-			var icon = item.Icon?.ImGuiHandle ?? 0;
+			var icon = item.Icon?.GetWrapOrEmpty().ImGuiHandle ?? 0;
 			ImGui.PushID((int)slot);
 			if (ImGui.ImageButton(icon, IconSize) && SlotSelect == null)
 				OpenSelector(slot);
@@ -133,8 +162,9 @@ namespace Ktisis.Interface.Windows.ActorEdit {
 			ImGui.PushItemWidth(120);
 			if (isWeapon) {
 				var equip = (WeaponEquip)equipObj;
+				//PluginLog.Information($"{equip.Set} {equip.Base} {equip.Variant}");
 				var val = new int[] { equip.Set, equip.Base, equip.Variant };
-				if (ImGui.InputInt3($"##{slot}", ref val[0])) {
+				if (ImGui.InputInt3($"##KtisisWep_{slot}", ref val[0])) {
 					equip.Set = (ushort)val[0];
 					equip.Base = (ushort)val[1];
 					equip.Variant = (ushort)val[2];
@@ -152,9 +182,9 @@ namespace Ktisis.Interface.Windows.ActorEdit {
 			ImGui.PopItemWidth();
 			ImGui.SameLine();
 
-			var dye = Dyes!.FirstOrDefault(i => i.RowId == (isWeapon ? ((WeaponEquip)equipObj).Dye : ((ItemEquip)equipObj).Dye))!;
-			if (ImGui.ColorButton($"{dye.Name} [{dye.RowId}]##{slot}", dye.ColorVector4, ImGuiColorEditFlags.NoBorder))
-				OpenDyePicker(slot);
+			DrawDyeButton((IEquipItem)equipObj, slot, 0);
+			ImGui.SameLine();
+			DrawDyeButton((IEquipItem)equipObj, slot, 1);
 
 			if (equipObj is WeaponEquip) {
 				ImGui.SameLine();
@@ -179,7 +209,7 @@ namespace Ktisis.Interface.Windows.ActorEdit {
 			if (SlotSelect == slot)
 				DrawSelectorList(slot, equipObj);
 			if (SlotSelectDye == slot)
-				DrawDyePicker(slot, equipObj);
+				DrawDyePicker(slot, equipObj, SelectDyeIndex);
 		}
 
 		public static void OpenSelector(EquipSlot slot) {
@@ -191,7 +221,26 @@ namespace Ktisis.Interface.Windows.ActorEdit {
 			SlotItems = null;
 		}
 
-		public static void OpenDyePicker(EquipSlot slot) =>	SlotSelectDye = slot;
+		private static void DrawDyeButton(IEquipItem item, EquipSlot slot, int index) {
+			var dye = Dyes!.FirstOrDefault(i => i.RowId == item.GetDye(index));
+			if (ImGui.ColorButton($"{dye.Name} [{dye.RowId}]##{slot}_{index}", dye.ColorVector4, ImGuiColorEditFlags.NoBorder))
+				OpenDyePicker(slot, index);
+			if (ImGui.IsItemClicked(ImGuiMouseButton.Right))
+				SetDye(item, slot, index, 0);
+		}
+
+		private unsafe static void SetDye(IEquipItem item, EquipSlot slot, int index, byte value) {
+			item.SetDye(index, value);
+			if (item is WeaponEquip wepEquip)
+				Target->Equip((int)slot, wepEquip);
+			else if (item is ItemEquip itemEquip)
+				Target->Equip(SlotToIndex(slot), itemEquip);
+		}
+
+		public static void OpenDyePicker(EquipSlot slot, int index) {
+			SlotSelectDye = slot;
+			SelectDyeIndex = index;
+		}
 		public static void CloseDyePicker() =>	SlotSelectDye = null;
 
 		public static void OpenSetSelector() => DrawSetSelection = true;
@@ -274,6 +323,28 @@ namespace Ktisis.Interface.Windows.ActorEdit {
 			);
 		}
 
+		private unsafe static void DrawGlassesSelector() {
+			if (Glasses == null) return;
+			
+			PopupSelect.HoverPopupWindow(
+				PopupSelect.HoverPopupWindowFlags.SelectorList | PopupSelect.HoverPopupWindowFlags.SearchBar,
+				Glasses,
+				(e, input) => e.Where(i => i.Name.Contains(input, StringComparison.OrdinalIgnoreCase)),
+				(i, a) => (  // draw Line
+						ImGui.Selectable(i.Name, a),
+						ImGui.IsItemFocused()
+					),
+				(i) => { // on Select
+					Target->SetGlasses((ushort)i.RowId);
+				},
+				() => DrawGlassesSelection = false,
+				ref GlassesSearch,
+				"Glasses Select",
+				"##glasses_list",
+				"##glasses_search"
+			);
+		}
+
 		public unsafe static void DrawSetSelectorList()
 		{
 			IEnumerable<Set> sets = Sets.FindSets();
@@ -307,7 +378,7 @@ namespace Ktisis.Interface.Windows.ActorEdit {
 
 		private static int DyeLastSubOrder = -1;
 		private const int DyePickerWidth = 485;
-		public static unsafe void DrawDyePicker(EquipSlot slot, object equipObj)
+		public static unsafe void DrawDyePicker(EquipSlot slot, object equipObj, int index)
 		{
 			PopupSelect.HoverPopupWindow(
 				PopupSelect.HoverPopupWindowFlags.SearchBar
@@ -318,13 +389,7 @@ namespace Ktisis.Interface.Windows.ActorEdit {
 				DrawDyePickerHeader,
 				DrawDyePickerItem,
 				(i) => { // on Select
-					if (equipObj is WeaponEquip wep) {
-						wep.Dye = (byte)i.RowId;
-						Target->Equip((int)slot, wep);
-					} else if (equipObj is ItemEquip item) {
-						item.Dye = (byte)i.RowId;
-						Target->Equip(SlotToIndex(slot), item);
-					}
+					SetDye((IEquipItem)equipObj, slot, index, (byte)i.RowId);
 				},
 				CloseDyePicker, // on close
 				ref DyeSearch,
@@ -369,7 +434,7 @@ namespace Ktisis.Interface.Windows.ActorEdit {
 				12 // number of columns
 			);
 		}
-		private static (bool, bool) DrawDyePickerItem(dynamic i, bool isActive)
+		private static (bool, bool) DrawDyePickerItem(Dye i, bool isActive)
 		{
 			bool isThisRealNewLine = PopupSelect.HoverPopupWindowIndexKey % PopupSelect.HoverPopupWindowColumns == 0;
 			bool isThisANewShade = i.SubOrder == 1;
@@ -400,8 +465,9 @@ namespace Ktisis.Interface.Windows.ActorEdit {
 
 			return (selecting, ImGui.IsItemFocused());
 		}
-		private static void DrawDyePickerHeader(dynamic i)
+		private static void DrawDyePickerHeader(object obj)
 		{
+			var i = (Dye)obj;
 			// TODO: configuration to not show this
 			var textSize = ImGui.CalcTextSize(i.Name);
 			float dyeShowcaseWidth = (DyePickerWidth - textSize.X - (ImGui.GetStyle().ItemSpacing.X * 2)) / 2;
@@ -416,11 +482,11 @@ namespace Ktisis.Interface.Windows.ActorEdit {
 	public class ItemCache : IDisposable {
 		private CancellationTokenSource? _tokenSrc;
 		
-		private ushort? IconId;
+		private int? IconId;
 		
 		public object? Equip;
 		public Item? Item;
-		public TextureWrap? Icon;
+		public ISharedImmediateTexture? Icon;
 
 		public ItemCache(object? equip, EquipSlot slot)
 			=> SetEquip(equip, slot);
@@ -432,7 +498,7 @@ namespace Ktisis.Interface.Windows.ActorEdit {
 			_tokenSrc = new CancellationTokenSource();
 			Resolve(equip, slot, _tokenSrc.Token).ContinueWith(task => {
 				if (task.Exception != null)
-					PluginLog.Error($"Error occurred while resolving item:\n{task.Exception}");
+					Ktisis.Log.Error($"Error occurred while resolving item:\n{task.Exception}");
 			}, TaskContinuationOptions.OnlyOnFaulted);
 		}
 
@@ -445,19 +511,15 @@ namespace Ktisis.Interface.Windows.ActorEdit {
 
 			var newIconId = item?.Icon;
 			if (newIconId != IconId) {
-				var newIcon = newIconId is ushort id ? Services.DataManager.GetImGuiTextureIcon(id, true) : null;
-				if (token.IsCancellationRequested) {
-					newIcon?.Dispose();
+				var newIcon = newIconId is int id ? Services.Textures.GetFromGameIcon(id) : null;
+				if (token.IsCancellationRequested)
 					return;
-				}
 				IconId = newIconId;
-				Icon?.Dispose();
 				Icon = newIcon;
 			}
 		}
 
 		public void Dispose() {
-			Icon?.Dispose();
 			Icon = null;
 		}
 

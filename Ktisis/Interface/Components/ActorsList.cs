@@ -6,7 +6,7 @@ using System.Numerics;
 using ImGuiNET;
 using FFXIVClientStructs.FFXIV.Client.Game.Object;
 using Dalamud.Interface;
-using DalamudGameObject = Dalamud.Game.ClientState.Objects.Types.GameObject;
+using DalamudGameObject = Dalamud.Game.ClientState.Objects.Types.IGameObject;
 using ObjectKind = Dalamud.Game.ClientState.Objects.Enums.ObjectKind;
 
 using Ktisis.Structs.Actor;
@@ -14,8 +14,7 @@ using Ktisis.Util;
 
 namespace Ktisis.Interface.Components {
 	internal static class ActorsList {
-
-		private static List<long> SavedObjects = new();
+		internal static List<long> SavedObjects = new();
 		private static List<DalamudGameObject>? SelectorList = null;
 		private static string Search = "";
 		private static readonly HashSet<ObjectKind> WhitelistObjectKinds = new(){
@@ -28,7 +27,6 @@ namespace Ktisis.Interface.Components {
 
 		// TODO to clear the list on gpose leave
 		public static void Clear() => SavedObjects.Clear();
-
 
 		// Draw
 
@@ -165,7 +163,7 @@ namespace Ktisis.Interface.Components {
 		private static bool IsValidActor(DalamudGameObject gameObject) =>
 			IsValidActor((long)gameObject.Address);
 		private static bool IsNonNetworkObject(DalamudGameObject gameObject) =>
-			gameObject.ObjectId == DalamudGameObject.InvalidGameObjectId;
+			gameObject.EntityId == 0xE0000000;
 		private static string ExtraInfo(DalamudGameObject gameObject) {
 			List<string> info = new();
 			if (IsGposeActor(gameObject))

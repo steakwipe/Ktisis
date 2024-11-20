@@ -44,16 +44,14 @@ namespace Ktisis.Overlay {
 
 			var actor = Ktisis.Target;
 			if (actor == null) return;
-
-			// Draw actor root
-
-			DrawActorRoot(actor);
-
-			// Draw model skeleton
 			
 			var model = actor->Model;
 			if (model == null || model->Skeleton == null) return;
+			
+			// Draw actor root
+			DrawActorRoot(actor);
 
+			// Draw model skeleton
 			DrawModelSkeleton(model);
 			
 			// Draw children (weapons, props)
@@ -99,6 +97,8 @@ namespace Ktisis.Overlay {
 				var camera = Services.Camera->GetActiveCamera();
 
 				var skeleton = pose->Skeleton;
+				if (skeleton == null) continue;
+				
 				for (var i = 1; i < skeleton->Bones.Length; i++) {
 					var bone = model->Skeleton->GetBone(p, i, parentModel != null);
 					if (_setCategory != null) bone._setCategory = _setCategory;

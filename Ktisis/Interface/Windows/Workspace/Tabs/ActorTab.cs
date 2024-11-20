@@ -3,6 +3,9 @@ using System.IO;
 using Dalamud.Interface;
 using Dalamud.Interface.Components;
 using Dalamud.Game.ClientState.Objects.Types;
+using Dalamud.Interface.Utility.Raii;
+
+using GLib.Widgets;
 
 using ImGuiNET;
 
@@ -12,14 +15,16 @@ using Ktisis.Interop.Hooks;
 using Ktisis.Structs.Actor;
 using Ktisis.Interface.Components;
 using Ktisis.Interface.Windows.ActorEdit;
+using Ktisis.Interop;
+using Ktisis.Structs.Actor.State;
 
 namespace Ktisis.Interface.Windows.Workspace.Tabs {
 	public static class ActorTab {
-		public unsafe static void Draw(GameObject target) {
-			var cfg = Ktisis.Configuration;
-
+		private static readonly NpcImport _npcImport = new();
+		
+		public unsafe static void Draw(IGameObject target) {
 			var actor = (Actor*)target.Address;
-			if (actor->Model == null) return;
+			if (actor == null) return;
 
 			// Actor details
 
@@ -149,10 +154,30 @@ namespace Ktisis.Interface.Windows.Workspace.Tabs {
 					}
 				);
 			}
+			
+			ImGui.Spacing();
+			if (ImGui.Button("Import NPC"))
+				_npcImport.Open();
+
+			if (IpcChecker.IsGlamourerActive()) {
+				using var _ = ImRaii.PushColor(ImGuiCol.Button, 0);
+				
+				ImGui.SameLine(0, ImGui.GetStyle().ItemInnerSpacing.X);
+				
+                Buttons.IconButtonTooltip(
+					FontAwesomeIcon.ExclamationCircle,
+					"Glamourer heavily interferes with edits made by other tools.\n" +
+					"You may need to disable it for this to function correctly!"
+				);
+			}
 
 			if (isUseless) ImGui.EndDisabled();
 
 			ImGui.Spacing();
+			if (ImGui.Button("Revert Changes"))
+				ActorStateWatcher.RevertToOriginal(actor);
+			
+			_npcImport.Draw(mode);
 		}
 	}
 }

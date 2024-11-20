@@ -3,15 +3,14 @@
   <PropertyGroup>
     <Authors>Chirp</Authors>
     <Company>Ktisis Tools</Company>
-    <Version>0.2.15</Version>
+    <Version>0.2.27</Version>
     <Description>An internal posing tool.</Description>
-    <Copyright></Copyright>
     <PackageProjectUrl>https://github.com/ktisis-tools/Ktisis</PackageProjectUrl>
     <Configurations>Debug;Release;External</Configurations>
   </PropertyGroup>
 
   <PropertyGroup>
-    <TargetFramework>net7.0-windows</TargetFramework>
+    <TargetFramework>net8.0-windows</TargetFramework>
     <Platforms>x64</Platforms>
     <Nullable>enable</Nullable>
     <LangVersion>latest</LangVersion>
@@ -30,7 +29,7 @@
   </PropertyGroup>
 
   <PropertyGroup Condition="$(Configuration) == 'External'">
-    <TargetFramework>net7.0</TargetFramework>
+    <TargetFramework>net8.0</TargetFramework>
     <DefineConstants>EXTERNAL_BUILD</DefineConstants>
     <DalamudLibPath>..\..\DalamudLibs\</DalamudLibPath>
   </PropertyGroup>
@@ -51,7 +50,7 @@
 
   <ItemGroup>
     <PackageReference Include="JetBrains.Annotations" Version="2022.3.1" />
-    <PackageReference Include="DalamudPackager" Version="2.1.6" />
+    <PackageReference Include="DalamudPackager" Version="2.1.12" />
     <Reference Include="FFXIVClientStructs">
       <HintPath>$(DalamudLibPath)FFXIVClientStructs.dll</HintPath>
       <Private>false</Private>
@@ -88,6 +87,15 @@
       <HintPath>$(DalamudLibPath)SharpDX.Mathematics.dll</HintPath>
       <Private>false</Private>
     </Reference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\GLib\GLib\GLib.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Remove="Data\Library\bnpc-index.json" />
+    <EmbeddedResource Include="Data\Library\bnpc-index.json" />
   </ItemGroup>
 
 </Project>

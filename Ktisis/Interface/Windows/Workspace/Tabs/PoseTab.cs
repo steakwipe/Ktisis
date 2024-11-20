@@ -1,5 +1,3 @@
-using System.IO;
-
 using ImGuiNET;
 
 using Dalamud.Interface;
@@ -7,12 +5,10 @@ using Dalamud.Game.ClientState.Objects.Types;
 
 using Ktisis.Util;
 using Ktisis.Overlay;
+using Ktisis.Helpers;
 using Ktisis.Structs.Actor;
 using Ktisis.Structs.Poses;
-using Ktisis.Data.Files;
-using Ktisis.Data.Serialization;
 using Ktisis.Interface.Components;
-using Ktisis.Interop.Hooks;
 
 namespace Ktisis.Interface.Windows.Workspace.Tabs {
 	public static class PoseTab {
@@ -20,13 +16,10 @@ namespace Ktisis.Interface.Windows.Workspace.Tabs {
 		
 		public static PoseContainer _TempPose = new();
 		
-		public unsafe static void Draw(GameObject target) {
+		public unsafe static void Draw(IGameObject target) {
 			var cfg = Ktisis.Configuration;
 
-			if (target == null) return;
-
 			var actor = (Actor*)target.Address;
-			if (actor->Model == null) return;
 
 			// Extra Controls
 			ControlButtons.DrawExtra();
@@ -37,26 +30,30 @@ namespace Ktisis.Interface.Windows.Workspace.Tabs {
 			if (ImGui.Checkbox("Parenting", ref parent))
 				cfg.EnableParenting = parent;
 
-			// Transform table
-			TransformTable(actor);
+			if (actor->Model != null) {
+				// Transform table
+				TransformTable(actor);
 
-			ImGui.Spacing();
+				ImGui.Spacing();
 
-			// Bone categories
-			if (ImGui.CollapsingHeader("Bone Categories")) {
-
-				if (!Categories.DrawToggleList(cfg)) {
-					ImGui.Text("No bone found.");
-					ImGui.Text("Show Skeleton (");
-					ImGui.SameLine();
-					GuiHelpers.Icon(FontAwesomeIcon.EyeSlash);
-					ImGui.SameLine();
-					ImGui.Text(") to fill this.");
+				// Bone categories
+				if (ImGui.CollapsingHeader("Bone Categories")) {
+					if (!Categories.DrawToggleList(cfg)) {
+						ImGui.Text("No bone found.");
+						ImGui.Text("Show Skeleton (");
+						ImGui.SameLine();
+						GuiHelpers.Icon(FontAwesomeIcon.EyeSlash);
+						ImGui.SameLine();
+						ImGui.Text(") to fill this.");
+					}
 				}
-			}
 
-			// Bone tree
-			BoneTree.Draw(actor);
+				// Bone tree
+				BoneTree.Draw(actor);
+			} else {
+				ImGui.Text("Target actor has no valid skeleton!");
+				ImGui.Spacing();
+			}
 
 			// Import & Export
 			if (ImGui.CollapsingHeader("Import & Export"))
@@ -71,17 +68,17 @@ namespace Ktisis.Interface.Windows.Workspace.Tabs {
 		}
 		
 		public static unsafe void DrawAdvancedDebugOptions(Actor* actor) {
-			if(ImGui.Button("Reset Current Pose") && actor->Model != null)
-				actor->Model->SyncModelSpace();
-
-			if(ImGui.Button("Set to Reference Pose") && actor->Model != null)
-				actor->Model->SyncModelSpace(true);
-
-			if(ImGui.Button("Store Pose") && actor->Model != null)
-				_TempPose.Store(actor->Model->Skeleton);
-			ImGui.SameLine();
-			if(ImGui.Button("Apply Pose") && actor->Model != null)
-				_TempPose.Apply(actor->Model->Skeleton);
+			if (actor->Model != null) {
+				if (ImGui.Button("Reset Current Pose"))
+					actor->Model->SyncModelSpace();
+				if (ImGui.Button("Set to Reference Pose"))
+					actor->Model->SyncModelSpace(true);
+				if (ImGui.Button("Store Pose"))
+					_TempPose.Store(actor->Model->Skeleton);
+				ImGui.SameLine();
+				if (ImGui.Button("Apply Pose"))
+					_TempPose.Apply(actor->Model->Skeleton);
+			}
 
 			if(ImGui.Button("Force Redraw"))
 				actor->Redraw();
@@ -176,60 +173,11 @@ namespace Ktisis.Interface.Windows.Workspace.Tabs {
 			if (ImGui.Button("Import##ImportExportPose")) {
 				KtisisGui.FileDialogManager.OpenFileDialog(
 					"Importing Pose",
-					"Pose Files (.pose){.pose}",
+					"Pose Files{.pose,.cmp}",
 					(success, path) => {
 						if (!success) return;
 
-						var content = File.ReadAllText(path[0]);
-						var pose = JsonParser.Deserialize<PoseFile>(content);
-						if (pose == null) return;
-
-						if (actor->Model == null) return;
-
-						var skeleton = actor->Model->Skeleton;
-						if (skeleton == null) return;
-
-						pose.ConvertLegacyBones();
-						
-						// Ensure posing is enabled.
-						if (!PoseHooks.PosingEnabled && !PoseHooks.AnamPosingEnabled)
-							PoseHooks.EnablePosing();
-
-						if (pose.Bones != null) {
-							for (var p = 0; p < skeleton->PartialSkeletonCount; p++) {
-								switch (p) {
-									case 0:
-										if (!body) continue;
-										break;
-									case 1:
-										if (!face) continue;
-										break;
-								}
-
-								pose.Bones.ApplyToPartial(skeleton, p, trans);
-							}
-						}
-
-						if (modes.HasFlag(PoseMode.Weapons)) {
-							var wepTrans = trans;
-							if (Ktisis.Configuration.PositionWeapons)
-								wepTrans |= PoseTransforms.Position;
-							
-							if (pose.MainHand != null) {
-								var skele = actor->GetWeaponSkeleton(WeaponSlot.MainHand);
-								if (skele != null) pose.MainHand.Apply(skele, wepTrans);
-							}
-
-							if (pose.OffHand != null) {
-								var skele = actor->GetWeaponSkeleton(WeaponSlot.OffHand);
-								if (skele != null) pose.OffHand.Apply(skele, wepTrans);
-							}
-
-							if (pose.Prop != null) {
-								var skele = actor->GetWeaponSkeleton(WeaponSlot.Prop);
-								if (skele != null) pose.Prop.Apply(skele, wepTrans);
-							}
-						}
+						PoseHelpers.ImportPose(actor, path, Ktisis.Configuration.PoseMode);
 					},
 					1,
 					null
@@ -246,44 +194,7 @@ namespace Ktisis.Interface.Windows.Workspace.Tabs {
 					(success, path) => {
 						if (!success) return;
 
-						var model = actor->Model;
-						if (model == null) return;
-
-						var skeleton = model->Skeleton;
-						if (skeleton == null) return;
-
-						var pose = new PoseFile();
-
-						pose.Position = model->Position;
-						pose.Rotation = model->Rotation;
-						pose.Scale = model->Scale;
-
-						pose.Bones = new PoseContainer();
-						pose.Bones.Store(skeleton);
-
-						if (modes.HasFlag(PoseMode.Weapons)) {
-							var main = actor->GetWeaponSkeleton(WeaponSlot.MainHand);
-							if (main != null) {
-								pose.MainHand = new PoseContainer();
-								pose.MainHand.Store(main);
-							}
-							
-							var off = actor->GetWeaponSkeleton(WeaponSlot.OffHand);
-							if (off != null) {
-								pose.OffHand = new PoseContainer();
-								pose.OffHand.Store(off);
-							}
-							
-							var prop = actor->GetWeaponSkeleton(WeaponSlot.Prop);
-							if (prop != null) {
-								pose.Prop = new PoseContainer();
-								pose.Prop.Store(prop);
-							}
-						}
-
-						var json = JsonParser.Serialize(pose);
-						using (var file = new StreamWriter(path))
-							file.Write(json);
+						PoseHelpers.ExportPose(actor, path, Ktisis.Configuration.PoseMode);
 					}
 				);
 			}

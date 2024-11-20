@@ -18,14 +18,17 @@ namespace Ktisis.Structs.Actor {
 
 		[FieldOffset(0x100)] public unsafe ActorModel* Model;
 		[FieldOffset(0x114)] public RenderMode RenderMode;
-		[FieldOffset(0x1B4)] public uint ModelId;
-
+		
 		[FieldOffset(0x6E8)] public ActorDrawData DrawData;
 
-		[FieldOffset(0x876)] public bool IsHatHidden;
+		[FieldOffset(0x8D6)] public bool IsHatHidden;
 
-		public const int GazeOffset = 0xC60;
+		public const int GazeOffset = 0xD00;
 		[FieldOffset(GazeOffset + 0x10)] public ActorGaze Gaze;
+		
+		[FieldOffset(0x1AB8)] public uint ModelId;
+		
+		[FieldOffset(0x226C)] public float Transparency;
 
 		public unsafe string? GetName() {
 			fixed (byte* ptr = GameObject.Name)
@@ -56,11 +59,27 @@ namespace Ktisis.Structs.Actor {
 
 		// Change equipment - no redraw method
 
+		public unsafe ItemEquip GetEquip(EquipIndex index) {
+			if (index == EquipIndex.Head && this.IsHatHidden)
+				return this.DrawData.Equipment.Head;
+			return this.Model != null ? this.Model->GetEquipSlot((int)index) : default;
+		}
+
+		public unsafe Customize GetCustomize()
+			=> this.Model != null ? this.Model->GetCustomize() ?? default : default;
+
+		public WeaponEquip GetWeaponEquip(EquipSlot slot)
+			=> slot == EquipSlot.MainHand ? this.DrawData.MainHand.GetEquip() : this.DrawData.OffHand.GetEquip();
+		
 		public unsafe void Equip(EquipIndex index, ItemEquip item) {
 			if (Methods.ActorChangeEquip == null) return;
-			fixed (ActorDrawData* ptr = &DrawData)
-				Methods.ActorChangeEquip(ptr, index, item);
+			
+			fixed (ActorDrawData* ptr = &DrawData) {
+				//Methods.ActorChangeEquip(ptr, index, (ItemEquip)0xFFFFFFFF);
+				Methods.ActorChangeEquip(ptr, index, &item, true);
+			}
 		}
+		
 		public void Equip(List<(EquipSlot, object)> items) {
 			foreach ((EquipSlot slot, object item) in items)
 				if (item is ItemEquip equip)
@@ -71,63 +90,84 @@ namespace Ktisis.Structs.Actor {
 
 		public unsafe void Equip(int slot, WeaponEquip item) {
 			if (Methods.ActorChangeWeapon == null) return;
-			fixed (ActorDrawData* ptr = &DrawData)
+			
+			fixed (ActorDrawData* ptr = &DrawData) {
+				Logger.Information($"Setting to {item.Set} {item.Base} {item.Variant} {item.Dye}");
+                
+				Methods.ActorChangeWeapon(ptr, slot, default, 0, 1, 0, 0);
 				Methods.ActorChangeWeapon(ptr, slot, item, 0, 1, 0, 0);
+				if (slot == 0)
+					this.DrawData.MainHand.SetEquip(item);
+				else if (slot == 1)
+					this.DrawData.OffHand.SetEquip(item);
+			}
+		}
+
+		public unsafe void SetGlasses(ushort id) {
+			if (Methods.ChangeGlasses == null) return;
+			
+			fixed (ActorDrawData* ptr = &DrawData)
+				Methods.ChangeGlasses(ptr, 0, id);
 		}
 
 		// Change customize - no redraw method
 
 		public unsafe bool UpdateCustomize() {
-			fixed (Customize* custom = &DrawData.Customize)
-				return ((Human*)Model)->UpdateDrawData((byte*)custom, true);
+			if (this.Model == null) return false;
+			
+			var result = false;
+			
+			var human = (Human*)this.Model;
+			if (this.Model->IsHuman())
+				result = human->UpdateDrawData((byte*)&this.Model->Customize, true);
+			
+			fixed (Customize* ptr = &DrawData.Customize)
+				return result | ((Human*)Model)->UpdateDrawData((byte*)ptr, true);
 		}
 
 		// Apply new customize
 
 		public unsafe void ApplyCustomize(Customize custom) {
-			var cur = DrawData.Customize;
-			DrawData.Customize = custom;
+			if (this.ModelId != 0) return;
+			
+			var cur = GetCustomize();
 
 			// Fix UpdateCustomize on Carbuncles & Minions
-			if (DrawData.Customize.ModelType == 0)
-				DrawData.Customize.ModelType = 1;
+			if (custom.ModelType == 0)
+				custom.ModelType = 1;
+			
+			if (custom.Race == Race.Viera) {
+				// avoid crash when loading invalid ears
+				var ears = custom.RaceFeatureType;
+				custom.RaceFeatureType = ears switch {
+					> 4 => 1,
+					0 => 4,
+					_ => ears
+				};
+			}
 
 			var faceHack = cur.FaceType != custom.FaceType;
-			if (cur.Race != custom.Race
-				|| cur.Tribe != custom.Tribe // Eye glitch.
-				|| cur.Gender != custom.Gender
-				|| cur.FaceType != custom.FaceType // Eye glitch.
-			) {
-				Redraw(faceHack);
-			} else {
-				if (DrawData.Customize.Race == Race.Viera) {
-					// avoid crash when loading invalid ears
-					var ears = DrawData.Customize.RaceFeatureType;
-					DrawData.Customize.RaceFeatureType = ears switch {
-						> 4 => 1,
-						0 => 4,
-						_ => ears
-					};
-				}
+			DrawData.Customize = custom;
+			var redraw = !UpdateCustomize()
+				|| faceHack
+				|| cur.Tribe != custom.Tribe
+				|| cur.Gender != custom.Gender;
 
-				var res = UpdateCustomize();
-				if (!res) {
-					Logger.Warning("Failed to update character. Forcing redraw.");
-					Redraw(faceHack);
-				} else if (cur.BustSize != custom.BustSize && Model != null) {
-					Model->ScaleBust();
-				}
+			if (redraw) {
+				Redraw();
+			} else if (cur.BustSize != custom.BustSize && Model != null) {
+				Model->ScaleBust();
 			}
 		}
 
 		// Actor redraw
 
-		public void Redraw(bool faceHack = false) {
-			faceHack &= GameObject.ObjectKind == (byte)ObjectKind.Pc;
+		public void Redraw() {
+			var faceHack = GameObject.ObjectKind == ObjectKind.Pc;
 			GameObject.DisableDraw();
-			if (faceHack) GameObject.ObjectKind = (byte)ObjectKind.BattleNpc;
+			if (faceHack) GameObject.ObjectKind = ObjectKind.BattleNpc;
 			GameObject.EnableDraw();
-			if (faceHack) GameObject.ObjectKind = (byte)ObjectKind.Pc;
+			if (faceHack) GameObject.ObjectKind = ObjectKind.Pc;
 		}
 		
 		// weapons

@@ -4,13 +4,11 @@ using System.Numerics;
 using System.Collections.Generic;
 
 using ImGuiNET;
-using ImGuiScene;
-
-using Lumina.Excel;
 
 using Dalamud.Interface;
 using Dalamud.Interface.Components;
 using Dalamud.Game.ClientState.Objects.Enums;
+using Dalamud.Interface.Textures;
 
 using Ktisis.Util;
 using Ktisis.Data;
@@ -21,13 +19,15 @@ using Ktisis.Localization;
 using Ktisis.Structs.Actor;
 using Ktisis.Interface.Windows.ActorEdit;
 
+using Lumina.Excel;
+
 namespace Ktisis.Interface.Windows {
 	public struct MenuOption {
 		public Menu Option;
 		public CustomizeIndex ColorIndex = 0;
 		public uint[] Colors = Array.Empty<uint>();
 
-		public Dictionary<uint, TextureWrap>? Select = null;
+		public Dictionary<uint, ISharedImmediateTexture>? Select = null;
 
 		public MenuOption(Menu option) => Option = option;
 	}
@@ -70,9 +70,9 @@ namespace Ktisis.Interface.Windows {
 
 		public static int FaceType = -1;
 		public static string FacialFeatureName = "";
-		public static List<TextureWrap>? FacialFeatureIcons = null;
+		public static List<ISharedImmediateTexture>? FacialFeatureIcons = null;
 
-		public static CharaMakeType? CharaMakeType;
+		public static CharaMakeType? CharaMakeData;
 
 		public static HumanCmp HumanCmp = new();
 
@@ -102,28 +102,26 @@ namespace Ktisis.Interface.Windows {
 			CustomIndex = index;
 			FacialFeatureIcons = null;
 		}
+		
+		private static void GetFeatureIcons(Customize custom) {
+			if (CharaMakeData == null) return;
 
-		private readonly static AsyncTask GetFeatureIcons = new(InvokeFeatureIcons);
-		private static void InvokeFeatureIcons(object[] args) {
-			if (args[0] is not Customize custom)
-				return;
-
-			if (CharaMakeType == null) return;
+			var data = CharaMakeData.Value;
 			
-			var features = new List<TextureWrap>();
+			var features = new List<ISharedImmediateTexture>();
 			for (var i = 0; i < 7; i++) {
 				var index = custom.FaceType - 1 + (8 * i);
 				if (custom.Race == Race.Hrothgar)
 					index -= 4; // ???
 
-				if (index < 0 || index >= CharaMakeType.FacialFeatures.Length)
+				if (index < 0 || index >= data.FacialFeatures.Length)
 					index = 8 * i;
 
-				var iconId = (uint)CharaMakeType.FacialFeatures[index];
+				var iconId = (uint)data.FacialFeatures[index];
 				if (iconId == 0)
-					iconId = (uint)CharaMakeType.FacialFeatures[8 * i];
+					iconId = (uint)data.FacialFeatures[8 * i];
 
-				var icon = Services.DataManager.GetImGuiTextureIcon(iconId);
+                var icon = Services.Textures.GetFromGameIcon(iconId);
 				if (icon != null) features.Add(icon);
 			}
 			FacialFeatureIcons = features;
@@ -135,12 +133,22 @@ namespace Ktisis.Interface.Windows {
 		public unsafe static void Draw() {
 			// Customize
 
-			var custom = Target->DrawData.Customize;
+			if (Target->ModelId != 0) {
+				ImGui.Text("Target actor must be a human to edit customization data.");
+				ImGui.Spacing();
+				if (ImGui.Button("Turn Human")) {
+					Target->ModelId = 0;
+					Target->Redraw();
+				}
+				ImGui.EndTabItem();
+				return;
+			}
+
+			var custom = Target->GetCustomize();
 
 			if (custom.Race == 0 || custom.Tribe == 0) {
 				custom.Race = Race.Hyur;
 				custom.Tribe = Tribe.Highlander;
-				Target->DrawData.Customize = custom;
 			}
 
 			var index = custom.GetMakeIndex();
@@ -166,8 +174,7 @@ namespace Ktisis.Interface.Windows {
 			// Gender
 
 			var isM = custom.Gender == Gender.Masculine;
-
-			if (ImGuiComponents.IconButton(isM ? FontAwesomeIcon.Mars : FontAwesomeIcon.Venus)) {
+			if (ImGuiComponents.IconButton("##KtisisCustomizeGender", isM ? FontAwesomeIcon.Mars : FontAwesomeIcon.Venus)) {
 				custom.Gender = isM ? Gender.Feminine : Gender.Masculine;
 				Apply(custom);
 			}
@@ -329,7 +336,7 @@ namespace Ktisis.Interface.Windows {
 
 			bool click;
 			if (sel!.ContainsKey(val))
-				click = ImGui.ImageButton(sel[val].ImGuiHandle, IconSize);
+				click = ImGui.ImageButton(sel[val].GetWrapOrEmpty().ImGuiHandle, IconSize);
 			else
 				click = ImGui.Button($"{val}", ButtonIconSize);
 
@@ -492,8 +499,8 @@ namespace Ktisis.Interface.Windows {
 		// Facial feature selector
 
 		public static void DrawFacialFeatures(Customize custom) {
-			if ((FacialFeatureIcons == null || custom.FaceType != FaceType) && !GetFeatureIcons.IsRunning)
-				GetFeatureIcons.Run(custom);
+			if ((FacialFeatureIcons == null || custom.FaceType != FaceType))
+				GetFeatureIcons(custom);
 
 			if (FacialFeatureIcons == null) return;
 
@@ -514,7 +521,7 @@ namespace Ktisis.Interface.Windows {
 				if (i == 7) // Legacy tattoo
 					button |= ImGui.Button("Legacy\nTattoo", ButtonIconSize);
 				else
-					button |= ImGui.ImageButton(FacialFeatureIcons[i].ImGuiHandle, IconSize);
+					button |= ImGui.ImageButton(FacialFeatureIcons[i].GetWrapOrEmpty().ImGuiHandle, IconSize);
 				ImGui.PopStyleColor();
 
 				if (button) {
@@ -569,7 +576,7 @@ namespace Ktisis.Interface.Windows {
 					foreach (var (val, icon) in option.Select!) {
 						if (icon == null) continue;
 
-						if (ImGui.ImageButton(icon.ImGuiHandle, ListIconSize)) {
+						if (ImGui.ImageButton(icon.GetWrapOrEmpty().ImGuiHandle, ListIconSize)) {
 							custom.Bytes[(uint)opt.Index] = (byte)val;
 							Apply(custom);
 						}
@@ -601,100 +608,102 @@ namespace Ktisis.Interface.Windows {
 
 		public static Dictionary<MenuType, List<MenuOption>> GetMenuOptions(uint index, Customize custom) {
 			var options = new Dictionary<MenuType, List<MenuOption>>();
-
-			var data = CharaMakeType;
-			if (data == null || data.RowId != index) {
-				CharaMakeType = Sheets.GetSheet<CharaMakeType>().GetRow(index)!;
+			
+			if (CharaMakeData == null || CharaMakeData.Value.RowId != index) {
+				CharaMakeData = Sheets.GetSheet<CharaMakeType>().GetRow(index);
 				MenuColors.Clear();
-				data = CharaMakeType;
 			}
+			
+			var data = CharaMakeData!.Value;
+			
+			for (int i = 0; i < CharaMakeType.MenuCt; i++) {
+				var val = data.Menus[i];
 
-			if (data != null) {
-				for (int i = 0; i < CharaMakeType.MenuCt; i++) {
-					var val = data.Menus[i];
+				if (val.Index == 0)
+					break;
 
-					if (val.Index == 0)
-						break;
+				var type = val.Type;
+				if (type == MenuType.Unknown1)
+					type = MenuType.Color;
 
-					var type = val.Type;
-					if (type == MenuType.Unknown1)
-						type = MenuType.Color;
-
-					if (type == MenuType.Color) { // I gave up on making this work procedurally
-						var menuCol = new MenuColor(val.Name, val.Index);
-						switch (val.Index) {
-							case CustomizeIndex.EyeColor:
-								menuCol.Colors = HumanCmp.GetEyeColors();
-								menuCol.AltIndex = CustomizeIndex.EyeColor2;
-								break;
-							case CustomizeIndex.FaceFeaturesColor:
-								menuCol.Colors = HumanCmp.GetEyeColors();
-								menuCol.Iterable = false;
-								break;
-							case CustomizeIndex.FacepaintColor:
-								menuCol.Colors = HumanCmp.GetFacepaintColors();
-								break;
-							case CustomizeIndex.HairColor:
-								menuCol.Colors = HumanCmp.GetHairColors(data.TribeEnum, data.GenderEnum);
-								menuCol.AltIndex = CustomizeIndex.HairColor2;
-								menuCol.AltColors = HumanCmp.GetHairHighlights();
-								break;
-							case CustomizeIndex.LipColor:
-								menuCol.Colors = HumanCmp.GetLipColors();
-								break;
-							case CustomizeIndex.SkinColor:
-								menuCol.Colors = HumanCmp.GetSkinColors(data.TribeEnum, data.GenderEnum);
-								break;
-							default:
-								Logger.Warning($"Color not implemented: {val.Index}");
-								break;
-						}
-						MenuColors.Add(menuCol);
-						continue;
+				if (type == MenuType.Color) { // I gave up on making this work procedurally
+					var menuCol = new MenuColor(val.Name, val.Index);
+					switch (val.Index) {
+						case CustomizeIndex.EyeColor:
+							menuCol.Colors = HumanCmp.GetEyeColors();
+							menuCol.AltIndex = CustomizeIndex.EyeColor2;
+							break;
+						case CustomizeIndex.FaceFeaturesColor:
+							menuCol.Colors = HumanCmp.GetEyeColors();
+							menuCol.Iterable = false;
+							break;
+						case CustomizeIndex.FacepaintColor:
+							menuCol.Colors = HumanCmp.GetFacepaintColors();
+							break;
+						case CustomizeIndex.HairColor:
+							menuCol.Colors = HumanCmp.GetHairColors(data.TribeEnum, data.GenderEnum);
+							menuCol.AltIndex = CustomizeIndex.HairColor2;
+							menuCol.AltColors = HumanCmp.GetHairHighlights();
+							break;
+						case CustomizeIndex.LipColor:
+							menuCol.Colors = HumanCmp.GetLipColors();
+							break;
+						case CustomizeIndex.SkinColor:
+							menuCol.Colors = HumanCmp.GetSkinColors(data.TribeEnum, data.GenderEnum);
+							break;
+						default:
+							Logger.Warning($"Color not implemented: {val.Index}");
+							break;
 					}
-
-					if (type == MenuType.SelectMulti) {
-						if (val.Index == CustomizeIndex.FaceFeatures)
-							FacialFeatureName = val.Name;
-						continue;
-					}
-
-					if (!options.ContainsKey(type))
-						options[type] = new();
-
-					var opt = new MenuOption(val);
-
-					if (val.HasIcon) {
-						var icons = new Dictionary<uint, TextureWrap>();
-						if (val.IsFeature) {
-							var featMake = CharaMakeType?.FeatureMake.Value;
-							if (featMake == null) continue;
-
-							List<LazyRow<CharaMakeCustomize>> features;
-							if (val.Index == CustomizeIndex.HairStyle)
-								features = featMake.HairStyles;
-							else if (val.Index == CustomizeIndex.Facepaint)
-								features = featMake.Facepaints;
-							else continue;
-
-							foreach (var feature in features) {
-								var feat = feature.Value;
-								if (feat == null || feat.FeatureId == 0) break;
-
-								var icon = Services.DataManager.GetImGuiTextureIcon(feat.Icon);
-								if (icon != null) icons.Add(feat.FeatureId, icon);
-							}
-						} else {
-							for (var x = 0; x < val.Count; x++) {
-								var icon = Services.DataManager.GetImGuiTextureIcon(val.Params[x]);
-								if (icon != null) icons.Add(val.Graphics[x], icon);
-							}
-						}
-						opt.Select = icons;
-					}
-
-					options[type].Add(opt);
+					MenuColors.Add(menuCol);
+					continue;
 				}
+
+				if (type == MenuType.SelectMulti) {
+					if (val.Index == CustomizeIndex.FaceFeatures)
+						FacialFeatureName = val.Name;
+					continue;
+				}
+
+				if (!options.ContainsKey(type))
+					options[type] = new();
+
+				var opt = new MenuOption(val);
+
+				if (val.HasIcon) {
+					var icons = new Dictionary<uint, ISharedImmediateTexture>();
+					if (val.IsFeature) {
+						var featMake = CharaMakeData?.FeatureMake.Value;
+						if (featMake == null) continue;
+
+						List<RowRef<CharaMakeCustomize>> features;
+						if (val.Index == CustomizeIndex.HairStyle)
+							features = featMake.Value.HairStyles;
+						else if (val.Index == CustomizeIndex.Facepaint)
+							features = featMake.Value.Facepaints;
+						else continue;
+
+						foreach (var feature in features) {
+							var feat = feature.Value;
+							if (feat.FeatureId == 0) break;
+
+							if (!Services.Textures.TryGetFromGameIcon(feat.Icon, out var icon))
+								continue;
+
+							icons.Add(feat.FeatureId, icon);
+						}
+					} else {
+						for (var x = 0; x < val.Count; x++) {
+							if (!Services.Textures.TryGetFromGameIcon(val.Params[x], out var icon))
+								continue;
+							
+							icons.Add(val.Graphics[x], icon);
+						}
+					}
+					opt.Select = icons;
+				}
+
+				options[type].Add(opt);
 			}
 
 			return options;
